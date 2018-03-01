@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes">     
+        <meta name="apple-mobile-web-app-capable" content="yes">    
+        <meta name="format-detection" content="telephone=no">    
+        <meta name="keywords" contect="Web Audio API">
+        <title>不要停下来！八分音符酱♪</title>
+        <style>html,body,div{
+            margin:0;
+            padding:0;
+        }
+            body{
+                background:#55b2e7;
+                font: 1rem/1.5 "Helvetica Neue",Helvetica,Arial,"Microsoft Yahei","Hiragino Sans GB","Heiti SC","WenQuanYi Micro Hei",sans-serif;
+            }
+            #app{
+                position:absolute;
+            }
+            .start .start-con,.play .play-con,.result .result-con{
+                display:block;
+            }
+            .start-con,.play-con,.result-con,.meta-con{
+                text-align:center;
+                display:none;
+            }
+            .start-con .start-btn{
+                position:absolute;
+                bottom:12%;
+                left:25%;
+                width:50%;
+            }
+            .play-con {
+                position: relative;
+                width: 100%;
+                text-align: center;
+            }
+            .result-btn{
+                position: absolute;
+                top: 12%;
+                left: 0;
+                color: #fff;
+                font-size:1.2rem;
+            }
+            .btn {
+                width: 50%;
+                margin: 1rem auto 0 auto;
+            }
+            #total{
+                font-size:2.5rem;
+            }
+            #percent{
+                font-size:2.5rem;
+                color:#ffe401;
+            }
+            .tip{   
+                position: absolute;
+                top: 5%;
+                width: 100%;
+                text-align: center;
+                color: #fff;
+                font-size: 1rem;
+            }
+            .play .play-con .score{   
+                position: absolute;
+                text-align:right;
+                top: 17%;
+                width: 90%;
+                color: #fff;
+                font-size: 1rem;
+            }
+            .fail-tip{
+                bottom: 2.5%;
+                color: #FFF;
+                position: absolute;
+                width: 100%;
+            }
+            .jump{
+                position: absolute;
+                bottom: 35%;
+                width: 30%;
+                left: 35%;
+            }
+            canvas { background:#55b2e7 }</style>
+    </head>
+
+    <body>
+        <div id="app" class="start">
+            <div id="startCon" class="start-con">
+                <div>
+                    <img src="https://p4.ssl.qhimg.com/t01646f04861757d75a.png" width="100%" height="auto">
+                </div>
+                <div class="jump">
+                    <img src="https://p4.ssl.qhimg.com/t01af77ab10fc268f1b.gif" width="100%" height="auto"/>
+                </div>
+                <div class="start-btn" id="start-btn" onclick="init()">
+                    <img src="http://p1.qhimg.com/t018811414e7da382b8.png" width="100%" height="auto">
+                </div>
+            </div>
+            <div id="canvasCon" class="play-con">
+                <canvas id="canvas"></canvas>
+                <div class="tip">叫得越大声，机器人跳的越高哦</div>
+                <div class="tip" style="top:11%">如果玩不了，试试chrome或者火狐浏览器吧</div>
+                <div class="score">已跳过<span id="score">0</span>坑</div>
+            </div>
+            <div id="resultCon" class="result-con">
+                <img src="http://p1.qhimg.com/t01895da2a076ca7782.png" width="100%" height="auto">
+                <div class="result-btn">
+                    <div>你跳过了<span id="total">0</span>个坑</div>
+                    <div>击败了全国<span id="percent">0%</span>的人</div>              
+                    <div onclick="share()" class="btn"><img src="http://p3.qhimg.com/t0149db55548166d9ad.png" width="100%" height="auto"></div>
+                    <div onclick="replay()" class="btn"><img src="http://p3.qhimg.com/t01adaaae18d343c140.png" width="100%" height="auto"></div>
+                </div>
+            </div>
+            <div class="mate-con" style="display:none">
+                <img id="run" src="http://p3.qhimg.com/t01d5d059429d65cb5d.png">
+            </div>
+        </div>
+    </body>    
+    <script src="https://s.ssl.qhres.com/static/e2a52f1928505ae1/zepto112.js" ></script>
+    <!-- 微信分享js -->
+    <script src="https://s1.ssl.qhres.com/!54a1e1c6/jweixin-1.0.0.js" ></script>
+    <script src="https://s1.ssl.qhres.com/static/85e1951c0459b84f.js"></script>
+    <!-- 核心js -->
+    <script>
+        var canvas;
+        var ctx;
+        var audioContext;
+        var analyser;
+        var mic;
+        var frequence;
+        var speed = 2;
+        var moveing;
+        var x = 60;
+        var ballHeight = window.innerHeight-195;
+        var pits = [{pw:320,px:0,ph:120}];
+        var total = 0;
+        var xR = 0;
+        var finished = false;
+        var p = 0;
+        function init() {
+            document.getElementById('app').className = "play";
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext("2d");
+            resize();
+
+            navigator.getMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+            navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;  
+            window.URL = window.URL || window.webkitURL || window.mozURL || window.msURL;  
+
+            if(!!!(navigator.getUserMedia||navigator.getMedia)){
+                alert('╭(╯^╰)╮哼，苹果爸爸是坏人，不支持ios版本呢');
+            }
+            navigator.getUserMedia({
+                audio: true
+            }, function(stream) {
+                audioContext = new(window.AudioContext || window.webkitAudioContext);
+                mic = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 1024;
+                mic.connect(analyser);
+                drawSpectrum();
+                //makePit();
+                setInterval(function(){
+                    makePit();
+                },1000);
+            }, function(e) {
+                alert('哎呀，在chrome里面打开试试吧');
+            });
+        }
+        function resize(){
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        function dead(){
+            document.getElementById('app').className = "result";
+            if(total<2){
+                p=0;
+            }else if(total>=2&&total<5){
+                p=2;
+            }else if(total>=5&&total<10){
+                p=12;
+            }else if(total>=10&&total<20){
+                p=15;
+            }else if(total>=20&&total<30){
+                p=27;
+            }else if(total>=30&&total<40){
+                p=36;
+            }else if(total>=40&&total<50){
+                p=52;
+            }else if(total>=50&&total<60){
+                p=66;
+            }else if(total>=60&&total<70){
+                p=78;
+            }else if(total>=70&&total<80){
+                p=83;
+            }else if(total>=80&&total<90){
+                p=95;
+            }else if(total>=90&&total<200){
+                p=97;
+            }else if(total>=200){
+                p=99;
+            }
+            document.getElementById('percent').innerText = p+'%';
+            x = 60;
+            ballHeight = window.innerHeight-195;
+            pits = [{pw:320,px:0,ph:120}];
+            total = 0;
+            xR = 0;
+            finished = false;
+            p = 0;
+            var WIDTH = canvas.width;
+            var HEIGHT = canvas.height;
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            WxShare.init({
+                "imgUrl" : 'https://p1.ssl.qhimg.com/t01f01392001a5251ae.jpg',                
+                "link" : 'https://jia.360.cn/vgame.html',
+                "desc" : '我已中毒！这个火爆的声控八音符小游戏手机也可以玩了！',
+                "title" : "不要停下来！八分音符酱♪"
+            });   
+        }
+        function drawSpectrum() {
+            if(!finished){
+                xR++;
+                var WIDTH = canvas.width;
+                var HEIGHT = canvas.height;
+                var array = new Uint8Array(128);
+                var heightCon = document.getElementById('max');
+                var max = 0;
+                var total=0;
+                var avg = 0;
+                analyser.getByteFrequencyData(array);
+                ctx.clearRect(0, 0, WIDTH, HEIGHT);
+                //array的长度代表最高音的频率
+                for (var i = 0; i < (array.length); i++) {
+                    var value = array[i];
+                    total = total + value;
+                    //value>max?max=value:null;
+                }
+                avg = total/array.length;
+                //heightCon.innerText = avg;
+                //drawLine();
+                drawPit();
+                moveY(ctx);
+                avg>90?jump(avg):null;
+                //jump(100);
+                requestAnimationFrame(drawSpectrum);  
+            }else{
+                window.cancelAnimationFrame(0);
+                dead();
+            }
+        }    
+        function drawLine(){
+            /*x = (x+0.8)%320;
+                ctx.fillRect(x, ballHeight, 10, 10);*/ 
+            ctx.beginPath();
+            ctx.moveTo(0,270);
+            ctx.lineTo(320,270);
+            ctx.closePath();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#bdbdbd";
+            ctx.stroke();
+        }
+        function makePit(){
+            if(!finished){
+                var w = 25+Math.floor(Math.random()*100);
+                var x = pits[pits.length-1].px+pits[pits.length-1].pw+20+60*Math.random();
+                var pit = {
+                    pw:w,
+                    px:x,
+                    ph:105+50*Math.random()
+                }
+                //console.log(w,x);
+                //console.log(w);
+                //console.log(x);
+                pits.push(pit);
+                //console.log(pits.length)                    
+            }
+        }
+        function drawPit(){
+            for(var i=0;i<pits.length;i++){
+                ctx.fillRect(pits[i].px,window.innerHeight-pits[i].ph,pits[i].pw,pits[i].ph);
+                pits[i].px = pits[i].px-1;
+                if(pits[i].px<-pits[i].pw){
+                    pits.shift();
+                    total++;
+                    //console.log(total-1);
+                    document.getElementById('total').innerText = total;
+                    document.getElementById('score').innerText = total;
+                }
+            }
+        }
+        function moveY(ctx,max){
+            var run=document.getElementById("run");
+            if(ballHeight>window.innerHeight-10){
+                flag = true; 
+                //ctx.fillRect(x, window.innerHeight-10, 10, 10);
+                ctx.drawImage(run,x, ballHeight-22.5, 25, 45);    
+                finished = true;
+                console.log(window.innerHeight-ballHeight);
+            }
+            else{                    
+                var y = onGround();
+                //console.log(y);
+                if(y){
+                    flag = true; 
+                    ballHeight = window.innerHeight-y;
+                    ctx.drawImage(run,x, ballHeight-45, 25, 45);
+                    //console.log(flag);
+                    return;
+                }else{
+                    flag = false;
+                    ctx.drawImage(run,x, ballHeight-45, 25, 45);  
+                    speed = speed-0.1;
+                    ballHeight = ballHeight - speed;
+                    //console.log(flag);
+                    return;
+                }
+            }
+        }
+        function jump(max){
+            //console.log(ballHeight);
+            if(flag){
+                speed = 6*(max/170);
+                ballHeight = ballHeight - speed;
+                //console.log(ballHeight);
+            }
+        }
+        function onGround(){
+            for(var i=0;i<pits.length;i++){
+                var obj = pits[i];
+                //小球在方块内部的时候，给他放在方块上面
+                if(obj.px<=60&&(obj.px+obj.pw)>=65&&(ballHeight>(window.innerHeight-obj.ph))){
+                    return obj.ph;
+                }
+            }
+            return 0;
+        }
+        function replay(){
+            document.getElementById('total').innerText = 0;
+            document.getElementById('score').innerText = 0;
+            init();
+        }        
+        function share(){
+            WxShare.init({
+                "imgUrl" : 'https://p1.ssl.qhimg.com/t01f01392001a5251ae.jpg',                
+                "link" : 'https://jia.360.cn/vgame.html',
+                "desc" : '我已中毒！这个火爆的声控八音符小游戏手机也可以玩了！',
+                "title" : "不要停下来！八分音符酱♪"
+            });            
+        }
+    </script>
+    <script src="https://s3.ssl.qhres.com/!ef2077b9/monitor.js" ></script>
+    <script type="text/javascript">
+        window.monitor && monitor.setProject("360_jia_web").getTrack().getClickAndKeydown();
+    </script>
+</html>
